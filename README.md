@@ -202,5 +202,6 @@ Use OpenZeppelin's tooling to avoid these.
 
 
 --------------------------------------------------------------------
-# how to write a upgradalbe smart contract , deeply it , change it and deeply again (using hardhat ) all by myself with no help from openzeppelin with full example
+# Question
+how to write a upgradalbe smart contract , deploy it , change it and deeply again (using hardhat ) all by myself with no help from openzeppelin?
 --------------------------------------------------------------------

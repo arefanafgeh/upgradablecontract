@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
-// Uncomment this line to use console.log
-// import "hardhat/console.sol";
 
-contract LogicV1 {
+contract LogicV2 {
 
     uint256 public _gap;
     uint256 public _gap2;
@@ -20,6 +18,6 @@ contract LogicV1 {
     }
 
     function increament() public {
-        x+=1;
+        x+=10;
     }
 }

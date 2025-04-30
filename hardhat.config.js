@@ -10,7 +10,7 @@ module.exports = {
     ganache: {
       url: "http://127.0.0.1:7545", // Ganache RPC URL
       accounts: {
-        mnemonic: "test test test test test test test test test test test junk",
+        mnemonic: "tail fun gasp keep ghost project alcohol knee forum struggle consider gravity",
       },
     },
   },

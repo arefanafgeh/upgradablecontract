@@ -1,34 +1,39 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.19;
 
 // Uncomment this line to use console.log
 // import "hardhat/console.sol";
 
-contract Lock {
-    uint public unlockTime;
-    address payable public owner;
+contract Proxy {
+    address public implementation;
+    address public owner;
 
-    event Withdrawal(uint amount, uint when);
-
-    constructor(uint _unlockTime) payable {
-        require(
-            block.timestamp < _unlockTime,
-            "Unlock time should be in the future"
-        );
-
-        unlockTime = _unlockTime;
-        owner = payable(msg.sender);
+    constructor(address _impl) {
+        implementation = _impl;
+        owner = msg.sender;
     }
 
-    function withdraw() public {
-        // Uncomment this line, and the import of "hardhat/console.sol", to print a log in your terminal
-        // console.log("Unlock time is %o and block timestamp is %o", unlockTime, block.timestamp);
+    modifier onlyOnwer(){
+        require(msg.sender==owner , "Not owner , get the fuck out of here");
+        _;
+    }
 
-        require(block.timestamp >= unlockTime, "You can't withdraw yet");
-        require(msg.sender == owner, "You aren't the owner");
+    function upgrade(address _newimpl) external onlyOnwer {
+        implementation = _newimpl;
+    }
 
-        emit Withdrawal(address(this).balance, block.timestamp);
+    fallback() external payable {
+        address impl  =implementation;
+        require(impl!=address(0),'No implementation , WTF are you doing man?!');
 
-        owner.transfer(address(this).balance);
+        assembly{
+            calldatacopy(0,0,calldatasize())
+            let result := delegatecall(gas(),impl,0,calldatasize(),0,0)
+            returndatacopy(0,0,returndatasize())
+
+            switch result
+            case 0 {revert(0 , returndatasize())}
+            case 1 {return(0 , returndatasize())}
+        }
     }
 }

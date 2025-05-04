@@ -17,7 +17,7 @@ contract LogicV2 {
         return x;
     }
 
-    function increament() public {
+    function increament() external {
         x+=10;
     }
 }

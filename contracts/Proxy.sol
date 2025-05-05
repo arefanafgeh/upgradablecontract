@@ -25,6 +25,9 @@ contract Proxy {
     fallback() external payable {
         address impl  =implementation;
         require(impl!=address(0),'No implementation , WTF are you doing man?!');
+        if (msg.sender == owner) {
+            revert("Admin cannot call logic functions");
+        }
 
         assembly{
             calldatacopy(0,0,calldatasize())

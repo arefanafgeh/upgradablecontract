@@ -1048,3 +1048,12 @@ If the admin accidentally calls this via the proxy in a **non-transparent** patt
 * Matches OpenZeppelin’s audited pattern (ERC1967).
 
 ---
+
+
+
+--------------------------------------------------------------------
+# Question
+now step by step teach me how to develop an upgradable contract using OpenZeppelin and hardhat
+--------------------------------------------------------------------
+
+

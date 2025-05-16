@@ -1057,3 +1057,552 @@ now step by step teach me how to develop an upgradable contract using OpenZeppel
 --------------------------------------------------------------------
 
 
+Great! Let’s walk step-by-step through building an upgradeable smart contract using OpenZeppelin and Hardhat. This will use the **Transparent Proxy Pattern** through OpenZeppelin's plugins.
+
+---
+
+### 🔧 Step 1: Set Up Your Hardhat Project
+
+```bash
+mkdir my-upgradeable-contract
+cd my-upgradeable-contract
+npm init -y
+npm install --save-dev hardhat
+npx hardhat
+```
+
+Choose: `Create a basic sample project`.
+
+---
+
+### 📦 Step 2: Install OpenZeppelin Plugins and Contracts
+
+```bash
+npm install @openzeppelin/contracts
+npm install @openzeppelin/hardhat-upgrades
+```
+
+Also install ethers if needed:
+
+```bash
+npm install --save-dev @nomicfoundation/hardhat-ethers ethers
+```
+
+---
+
+### 🧠 Step 3: Create Your Upgradeable Logic Contract
+
+Create `contracts/MyContract.sol`:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+
+contract MyContract is Initializable {
+    uint256 public value;
+    address public owner;
+
+    function initialize(uint256 _value) public initializer {
+        value = _value;
+        owner = msg.sender;
+    }
+
+    function setValue(uint256 _newValue) public {
+        require(msg.sender == owner, "Not owner");
+        value = _newValue;
+    }
+}
+```
+
+⚠️ Use `initialize()` instead of a constructor — this is key for upgradeability.
+
+---
+
+### 🚀 Step 4: Write Your Deployment Script
+
+In `scripts/deploy.js`:
+
+```javascript
+const { ethers, upgrades } = require("hardhat");
+
+async function main() {
+  const MyContract = await ethers.getContractFactory("MyContract");
+  const proxy = await upgrades.deployProxy(MyContract, [42], {
+    initializer: "initialize",
+  });
+  await proxy.waitForDeployment();
+
+  console.log("Proxy deployed to:", await proxy.getAddress());
+}
+
+main();
+```
+
+Then run:
+
+```bash
+npx hardhat run scripts/deploy.js --network hardhat
+```
+
+---
+
+### 🧪 Step 5: Interact with the Contract
+
+You can now call the proxy contract using Hardhat scripts or tests. The logic is in a separate implementation contract, but storage is in the proxy.
+
+---
+
+### 🔁 Step 6: Upgrade Your Contract
+
+1. Create a new version in `contracts/MyContractV2.sol`:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+
+contract MyContractV2 is Initializable {
+    uint256 public value;
+    address public owner;
+
+    function initialize(uint256 _value) public initializer {
+        value = _value;
+        owner = msg.sender;
+    }
+
+    function setValue(uint256 _newValue) public {
+        require(msg.sender == owner, "Not owner");
+        value = _newValue;
+    }
+
+    function doubleValue() public {
+        value *= 2;
+    }
+}
+```
+
+2. Create an upgrade script:
+
+```javascript
+const { ethers, upgrades } = require("hardhat");
+
+async function main() {
+  const NewContract = await ethers.getContractFactory("MyContractV2");
+  const proxyAddress = "YOUR_PROXY_ADDRESS"; // Replace with deployed proxy address
+
+  const upgraded = await upgrades.upgradeProxy(proxyAddress, NewContract);
+  console.log("Contract upgraded");
+}
+
+main();
+```
+
+---
+
+### 🛡️ Why Use OpenZeppelin?
+
+* OpenZeppelin ensures storage layout consistency.
+* Automatically handles Transparent Proxy pattern.
+* Easy and secure upgrade flow using plugins.
+* Prevents `delegatecall` issues and misconfigurations.
+
+
+--------------------------------------------------------------------
+# Question
+Now , lets Dive into UUPS Proxy method and learn how to develop it
+--------------------------------------------------------------------
+Great — let’s dive into **UUPS (Universal Upgradeable Proxy Standard)** and walk through how to **develop and upgrade a UUPS proxy** smart contract using **OpenZeppelin** and **Hardhat**, step-by-step.
+
+---
+
+## 🔍 What is UUPS Proxy?
+
+UUPS is a lightweight and more gas-efficient proxy standard than Transparent Proxy. The **upgrade logic lives in the implementation contract**, and you explicitly define an `upgradeTo` function protected by access control.
+
+Unlike the Transparent Proxy pattern, where upgrades are managed by the proxy admin contract, in UUPS, the **implementation contract is responsible for upgrading itself**.
+
+---
+
+## 🔧 Step-by-Step: UUPS Proxy with Hardhat
+
+---
+
+### ✅ 1. Project Setup
+
+If you haven’t already:
+
+```bash
+mkdir uups-demo && cd uups-demo
+npm init -y
+npm install --save-dev hardhat
+npx hardhat
+```
+
+Choose: `Create a JavaScript project`.
+
+Install required dependencies:
+
+```bash
+npm install @openzeppelin/contracts-upgradeable @openzeppelin/hardhat-upgrades @nomicfoundation/hardhat-toolbox
+```
+
+---
+
+### ✅ 2. Configure Hardhat
+
+Update `hardhat.config.js`:
+
+```js
+require("@openzeppelin/hardhat-upgrades");
+require("@nomicfoundation/hardhat-toolbox");
+
+module.exports = {
+  solidity: "0.8.20",
+};
+```
+
+---
+
+### ✅ 3. Write First Version: `BoxV1`
+
+Create: `contracts/BoxV1.sol`
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
+contract BoxV1 is Initializable, UUPSUpgradeable, OwnableUpgradeable {
+    uint256 private value;
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize() public initializer {
+        __Ownable_init();
+        __UUPSUpgradeable_init();
+        value = 100;
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    function getValue() public view returns (uint256) {
+        return value;
+    }
+
+    function setValue(uint256 _value) public {
+        value = _value;
+    }
+}
+```
+
+---
+
+### ✅ 4. Deploy UUPS Proxy
+
+Create: `scripts/deploy.js`
+
+```js
+const { ethers, upgrades } = require("hardhat");
+
+async function main() {
+  const Box = await ethers.getContractFactory("BoxV1");
+
+  const box = await upgrades.deployProxy(Box, [], {
+    initializer: "initialize",
+    kind: "uups",
+  });
+
+  await box.waitForDeployment();
+  console.log("Box UUPS Proxy deployed at:", await box.getAddress());
+}
+
+main();
+```
+
+Run it:
+
+```bash
+npx hardhat run scripts/deploy.js --network hardhat
+```
+
+Save the address of the proxy printed.
+
+---
+
+### ✅ 5. Upgrade to V2
+
+Create: `contracts/BoxV2.sol`
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
+contract BoxV2 is Initializable, UUPSUpgradeable, OwnableUpgradeable {
+    uint256 private value;
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize() public initializer {
+        __Ownable_init();
+        __UUPSUpgradeable_init();
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    function getValue() public view returns (uint256) {
+        return value;
+    }
+
+    function setValue(uint256 _value) public {
+        value = _value;
+    }
+
+    function double() public {
+        value = value * 2;
+    }
+}
+```
+
+---
+
+### ✅ 6. Upgrade Script
+
+Create: `scripts/upgrade.js`
+
+```js
+const { ethers, upgrades } = require("hardhat");
+
+async function main() {
+  const proxyAddress = "PASTE_YOUR_PROXY_ADDRESS_HERE";
+
+  const BoxV2 = await ethers.getContractFactory("BoxV2");
+  const upgraded = await upgrades.upgradeProxy(proxyAddress, BoxV2);
+  console.log("Box upgraded to V2 at:", await upgraded.getAddress());
+}
+
+main();
+```
+
+Run:
+
+```bash
+npx hardhat run scripts/upgrade.js --network hardhat
+```
+
+---
+
+## 🔐 Key Differences vs Transparent Proxy
+
+| Feature                | Transparent Proxy                | UUPS Proxy                               |
+| ---------------------- | -------------------------------- | ---------------------------------------- |
+| Upgrade logic          | Stored in a separate Proxy Admin | Implemented inside logic contract        |
+| `upgradeTo()` function | Managed by ProxyAdmin            | Must implement in your contract          |
+| Gas usage              | Slightly more                    | More efficient (only one delegate call)  |
+| Safety                 | Easier for new devs              | More flexibility, but requires more care |
+
+---
+
+## 🧪 Want to test interaction with the upgraded contract?
+
+You can now call `double()` on the upgraded contract:
+
+```js
+const box = await ethers.getContractAt("BoxV2", proxyAddress);
+await box.double();
+```
+
+---
+
+
+
+
+--------------------------------------------------------------------
+# Question
+HOw is UUPS different than just using Initializable Openzeppelin 
+--------------------------------------------------------------------
+
+
+
+Great question — many developers get confused here because both UUPS and `Initializable` from OpenZeppelin are often used *together*. But they serve **very different purposes**.
+
+Let’s break it down clearly:
+
+---
+
+## 🔍 `Initializable` – What It Does
+
+The `Initializable` contract from OpenZeppelin allows **constructor logic to be moved into an `initialize()` function**, which can be called **only once**.
+
+This is needed because when you deploy a **proxy**, it does not call the constructor of the logic (implementation) contract. That means you **must** use an initializer to set up things like:
+
+- Ownership (`Ownable`)
+- Initial state variables
+- Role access
+
+```solidity
+contract MyContract is Initializable {
+    uint256 public x;
+
+    function initialize(uint256 _x) public initializer {
+        x = _x;
+    }
+}
+```
+
+So, `Initializable` is about setting **initial state** in a proxy-safe way.
+
+---
+
+## 🔍 UUPS – What It Does
+
+UUPS is a **proxy upgrade pattern**. It defines **how** your contract can be upgraded — and in UUPS, the upgrade logic (like `upgradeTo()`) is **part of the logic contract itself**.
+
+You implement `_authorizeUpgrade()` to control who is allowed to upgrade.
+
+```solidity
+contract MyContract is UUPSUpgradeable {
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+}
+```
+
+So, **UUPS handles upgradability**, while `Initializable` handles **initialization**.
+
+---
+
+## 🧠 Summary: Key Difference
+
+| Feature                     | `Initializable`                          | `UUPSUpgradeable`                         |
+|----------------------------|------------------------------------------|-------------------------------------------|
+| Purpose                    | Safe contract initialization             | Making the contract upgradeable (UUPS)    |
+| Handles constructor logic? | ✅ Yes                                     | ❌ No                                      |
+| Controls upgrades?         | ❌ No                                      | ✅ Yes                                     |
+| Used with proxy?           | ✅ Yes (required)                          | ✅ Yes (UUPS only)                         |
+
+---
+
+## 🧱 Why Do We Use Both Together in UUPS?
+
+When writing a UUPS upgradeable contract using OpenZeppelin, the correct inheritance is usually:
+
+```solidity
+contract MyContract is Initializable, UUPSUpgradeable, OwnableUpgradeable
+```
+
+Because:
+
+- `Initializable` allows the contract to be set up after proxy deployment.
+- `UUPSUpgradeable` makes the logic contract upgradeable.
+- `OwnableUpgradeable` gives us access control for `_authorizeUpgrade`.
+
+---
+
+## 🔁 TL;DR
+
+- `Initializable` = replaces constructor when using proxy.
+- `UUPSUpgradeable` = makes the contract support upgrades.
+- You need **both** to safely use UUPS with proxies.
+
+---
+
+
+
+--------------------------------------------------------------------
+# Question
+why in the example there are constuctor in contracts
+--------------------------------------------------------------------
+
+Excellent observation — and this is a very **common source of confusion** when learning upgradeable contracts.
+
+Let’s clear it up **step by step**:
+
+---
+
+## 🔧 Why Are There Constructors in Some UUPS Contracts?
+
+When you write upgradeable contracts using **OpenZeppelin**, the logic contract (the one you pass to the proxy) **must NOT use constructors to initialize state**.
+
+However, **you may still see constructors**, and they are used for one of two reasons:
+
+---
+
+### ✅ 1. For Deployment Without a Proxy (Test Purposes or Fallback)
+
+Sometimes developers add a constructor **just for testing** or for safety if someone accidentally deploys the implementation directly:
+
+```solidity
+constructor() {
+    _disableInitializers(); // Prevent anyone from calling initialize() on the logic contract itself
+}
+```
+
+This constructor **disables initialization**, so if someone tries to call `initialize()` on the **implementation contract directly**, it will revert. This prevents security issues.
+
+---
+
+### ✅ 2. For Logic Contracts That Are Also Used Without a Proxy (not common)
+
+Occasionally, contracts are written to be both upgradeable (via proxy) **or** used standalone (in testing or minimal deployments). In that case, a constructor may be present to support both modes — though this is **not recommended** in production systems.
+
+---
+
+## 🔥 Why You MUST NOT Use a Real Constructor in Upgradeable Contracts
+
+In upgradeable contracts:
+
+- The **constructor will never be called** when deployed via a proxy.
+- State variables initialized in the constructor will be **lost** because the proxy stores state — not the logic contract.
+
+So instead, OpenZeppelin provides the `initializer` modifier:
+
+```solidity
+function initialize() public initializer {
+    myVar = 42; // Proper way to initialize when using proxy
+}
+```
+
+---
+
+## 📌 So Why Does OpenZeppelin Use a Constructor?
+
+They often use this pattern:
+
+```solidity
+constructor() {
+    _disableInitializers();
+}
+```
+
+This constructor is NOT for setting state. It’s just a **security measure** to prevent initialization on the logic contract if deployed alone.
+
+---
+
+## ✅ TL;DR
+
+| Purpose                       | Can We Use It in UUPS Upgradeable Contracts? | Why / Why Not |
+|------------------------------|----------------------------------------------|---------------|
+| Set state variables           | ❌ No                                        | Proxies don’t use constructor logic |
+| Disable initialization       | ✅ Yes                                       | For security via `_disableInitializers()` |
+| Initialize via `initialize()` | ✅ Yes                                       | Correct pattern using `initializer` modifier |
+
+---
+
+--------------------------------------------------------------------
+# Question
+Teach Me about Diamond Proxy now
+--------------------------------------------------------------------

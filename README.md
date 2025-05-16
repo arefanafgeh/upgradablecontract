@@ -1606,3 +1606,183 @@ This constructor is NOT for setting state. It’s just a **security measure** to
 # Question
 Teach Me about Diamond Proxy now
 --------------------------------------------------------------------
+
+Great — you're ready for the **Diamond Proxy Pattern (EIP-2535)**, which is the most **modular and flexible** proxy architecture in Solidity. It’s used in large, complex smart contracts like DeFi protocols (e.g., Aavegotchi) where upgradeability, modularity, and gas efficiency are critical.
+
+---
+
+## 🧱 What Is the Diamond Proxy Pattern?
+
+The **Diamond Standard (EIP-2535)** allows **splitting a single smart contract system into multiple smaller contracts** called **facets**, while maintaining **a single contract address**.
+
+* The **Diamond**: Main contract users interact with. It holds storage and delegates calls to facets.
+* **Facets**: Logic contracts that contain functions.
+* **DiamondCut**: Mechanism to add, replace, or remove facets at runtime.
+* **Loupe**: Optional introspection tools to inspect available facets/functions.
+
+Unlike Transparent/UUPS proxies that delegate to a single logic contract, a Diamond Proxy can delegate to **many logic contracts at once**.
+
+---
+
+## 🧠 Why Use Diamond Proxy?
+
+| Feature                  | Diamond Proxy      | Transparent Proxy | UUPS Proxy |
+| ------------------------ | ------------------ | ----------------- | ---------- |
+| Modular Upgrades         | ✅ Excellent        | ❌ Poor            | ⚠️ Manual  |
+| Many Logic Contracts     | ✅ Yes              | ❌ Only 1          | ❌ Only 1   |
+| Dynamic Function Routing | ✅ Yes              | ❌ No              | ❌ No       |
+| Storage Centralization   | ✅ Yes (in Diamond) | ✅ Yes             | ✅ Yes      |
+| Complexity               | 😵 High            | 🙂 Low            | 😐 Medium  |
+
+It’s best when:
+
+* Your contract has 20+ functions and needs modularity
+* You want to upgrade only parts of the logic
+* You want to isolate bugs or vulnerabilities to individual modules (facets)
+
+---
+
+## 🛠 How It Works
+
+Every external call to the Diamond contract triggers the `fallback()` function, which:
+
+1. Looks up the function selector (`msg.sig`) in a **function selector to facet address mapping**
+2. Uses `delegatecall()` to forward the call to the corresponding facet
+
+### 🔁 Dynamic Routing:
+
+```solidity
+function fallback() external payable {
+    address facet = selectorToFacet[msg.sig];
+    require(facet != address(0), "Function does not exist");
+    assembly {
+        calldatacopy(0, 0, calldatasize())
+        let result := delegatecall(gas(), facet, 0, calldatasize(), 0, 0)
+        returndatacopy(0, 0, returndatasize())
+        switch result
+        case 0 { revert(0, returndatasize()) }
+        default { return(0, returndatasize()) }
+    }
+}
+```
+
+---
+
+## 📦 Storage Design
+
+Only the **Diamond** holds state. Facets do not have storage of their own. So to share state:
+
+* Use **a shared library struct**
+* Store it at a **fixed storage slot**
+
+### Example: AppStorage
+
+```solidity
+struct AppStorage {
+    address owner;
+    mapping(address => bool) whitelist;
+}
+
+bytes32 constant DIAMOND_STORAGE_POSITION = keccak256("diamond.standard.app.storage");
+
+function diamondStorage() internal pure returns (AppStorage storage ds) {
+    bytes32 position = DIAMOND_STORAGE_POSITION;
+    assembly {
+        ds.slot := position
+    }
+}
+```
+
+All facets access `diamondStorage()` to read/write shared state.
+
+---
+
+## 🔧 Adding/Replacing/Removing Functions (DiamondCut)
+
+The Diamond contract must implement:
+
+```solidity
+function diamondCut(
+    FacetCut[] calldata _diamondCut,
+    address _init,
+    bytes calldata _calldata
+) external;
+```
+
+Where `FacetCut[]` tells it:
+
+* What facet to call
+* What functions to add/replace/remove
+
+```solidity
+enum FacetCutAction { Add, Replace, Remove }
+
+struct FacetCut {
+    address facetAddress;
+    FacetCutAction action;
+    bytes4[] functionSelectors;
+}
+```
+
+This allows:
+
+* Adding new features
+* Replacing buggy logic
+* Removing deprecated functions
+
+---
+
+## 🛡 Security Considerations
+
+1. **Storage Collisions**: Avoid storage clashes using fixed slots or structs
+2. **Access Control**: DiamondCut must be protected (e.g., `onlyOwner`)
+3. **Fallback Gas Risks**: Fallback must be minimal and gas-optimized
+4. **Function Selector Clashes**: Same function selector across facets = bugs
+
+---
+
+## 📁 Folder Structure in Hardhat
+
+```text
+/contracts
+  /facets
+    - OwnershipFacet.sol
+    - ERC20Facet.sol
+    - DiamondCutFacet.sol
+    - DiamondLoupeFacet.sol
+  /libraries
+    - LibDiamond.sol
+    - LibAppStorage.sol
+  - Diamond.sol
+```
+
+You keep facets lightweight and testable, while `Diamond.sol` holds shared state and fallback routing.
+
+---
+
+## 🧪 How to Learn It Practically
+
+1. **Fork EIP-2535 Reference Repo**: [https://github.com/mudgen/diamond-1-hardhat](https://github.com/mudgen/diamond-1-hardhat)
+2. Read:
+
+   * [`Diamond.sol`](https://github.com/mudgen/diamond-1-hardhat/blob/main/contracts/Diamond.sol)
+   * [`DiamondCutFacet.sol`](https://github.com/mudgen/diamond-1-hardhat/blob/main/contracts/facets/DiamondCutFacet.sol)
+   * [`AppStorage`](https://github.com/mudgen/diamond-1-hardhat/blob/main/contracts/libraries/LibDiamond.sol)
+3. Write:
+
+   * A custom facet (e.g., `CounterFacet`)
+   * Add/replace/remove logic using `diamondCut()`
+4. Deploy with Hardhat and verify selector routing
+
+---
+
+## 🧠 TL;DR
+
+* Diamond = 1 storage + infinite logic contracts
+* Facets are hot-swappable logic modules
+* Everything routes through `fallback()` using `msg.sig`
+* Safer & cleaner than monolithic upgradeable contracts
+* More complex but scalable and gas-efficient
+
+---
+
